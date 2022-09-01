@@ -1,13 +1,10 @@
 ﻿using NcmApi.Utils;
 using Newtonsoft.Json.Linq;
 using System;
-using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Unicode;
 
 namespace NcmApi;
 
@@ -15,7 +12,7 @@ public class Ncm
 {
     private HttpClient _httpClient = new HttpClient();
     private string _token = string.Empty;
-    
+
     public bool isLoggedin
     {
         get
@@ -31,11 +28,20 @@ public class Ncm
         }
     }
 
+    public string Token
+    {
+        get
+        {
+            return _token;
+        }
+    }
+
     public Ncm()
     {
     }
 
     #region 登录
+
     public void Login(string token)
     {
         _token = token;
@@ -44,8 +50,9 @@ public class Ncm
     public void Login(string email, string password)
     {
         JObject result = Api.Login.Email(email, password, this);
-        if ((int)result["code"] == 502) {
-            throw new Exception("账号或密码错误");
+        if ((int)result["code"] == 502)
+        {
+            throw new LoginFailed("账号或密码错误");
         }
         else
         {
@@ -58,7 +65,7 @@ public class Ncm
         JObject result = Api.Login.PhonePsw(phone, password, this);
         if ((int)result["code"] == 502)
         {
-            throw new Exception("账号或密码错误");
+            throw new LoginFailed("账号或密码错误");
         }
         else
         {
@@ -66,20 +73,21 @@ public class Ncm
         }
     }
 
-    public void Login(int phone,int captcha)
+    public void Login(int phone, int captcha)
     {
         JObject result = Api.Login.PhoneVer(phone, captcha, this);
         if ((int)result["code"] == 502)
         {
-            throw new Exception("账号或验证码错误");
+            throw new LoginFailed("账号或密码错误");
         }
         else
         {
             _token = result["token"].ToString();
         }
-        
     }
-    #endregion
+
+    #endregion 登录
+
     public JObject Request(HttpMethod method, string url, HttpContent postData = null)
     {
         HttpRequestMessage msg = new(method, url);
@@ -98,7 +106,8 @@ public class Ncm
         }
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
         var task = _httpClient.SendAsync(msg);
-        return JObject.Parse(task.Result.Content.ReadAsStringAsync().Result);
+        JObject result = JObject.Parse(task.Result.Content.ReadAsStringAsync().Result);
+        return result;
     }
 
     public string MD5(string content)
@@ -121,7 +130,6 @@ public class Ncm
         result.Headers.Add("Cookie", "os=pc;appver=2.9.7");
         return result;
     }
-
 }
 
 public static class Api
@@ -213,7 +221,7 @@ public static class Api
             return ncm.Request(HttpMethod.Post, _URL, ncm.DefaultContent(data));
         }
 
-        public static JObject PhonePsw(int phone, string password, Ncm ncm, int countryCode=86)
+        public static JObject PhonePsw(int phone, string password, Ncm ncm, int countryCode = 86)
         {
             string _URL = "https://music.163.com/api/login/cellphone";
             string pswMD5 = ncm.MD5(password);
@@ -228,6 +236,28 @@ public static class Api
             string resBody = $"phone={phone}&countryCode={countryCode}&captcha={captcha}&rememberLogin=true";
             HttpContent data = new StringContent(resBody);
             return ncm.Request(HttpMethod.Post, _URL, ncm.DefaultContent(data));
+        }
+    }
+
+    public static class User
+    {
+        public static JObject Detail(string id, Ncm ncm)
+        {
+            string _URL = $"https://music.163.com/api/v1/user/detail/{id}";
+            return ncm.Request(HttpMethod.Post, _URL);
+        }
+
+        public static JObject Account(Ncm ncm)
+        {
+            string _URL = "https://music.163.com/api/nuser/account/get";
+            return ncm.Request(HttpMethod.Post, _URL);
+        }
+
+        public static JObject DailyTask(string type, Ncm ncm)
+        {
+            string _URL = "https://music.163.com/api/point/dailyTask";
+            HttpContent data = new StringContent($"type={type}");
+            return ncm.Request(HttpMethod.Post, _URL, data);
         }
     }
 }
